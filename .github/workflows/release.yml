@@ -22,19 +22,23 @@ jobs:
         with:
           msystem: MINGW64
           update: false
+          # psutil & PyInstaller come from pacman: PyPI has no mingw/py3.14
+          # wheels for PyInstaller, and psutil's sdist fails on the
+          # newer MSYS2 winternl.h (KWAIT_REASON enum conflict)
           install: >-
             mingw-w64-x86_64-gtk4
             mingw-w64-x86_64-python
             mingw-w64-x86_64-python-gobject
             mingw-w64-x86_64-python-pip
             mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-python-psutil
+            mingw-w64-x86_64-pyinstaller
 
       # pip builds the C deps (brotli, pycryptodomex) with the mingw gcc above;
       # MSYS2's Python is marked externally managed, hence --break-system-packages
       - name: Install package + PyInstaller
         run: |
           python -m pip install --break-system-packages .
-          python -m pip install --break-system-packages "pyinstaller>=6.16"
 
       - name: Build zfile-gui.exe
         run: |
