@@ -266,6 +266,7 @@ class Win(Gtk.ApplicationWindow):
         self.x_btn = Gtk.Button(label="Giải nén", css_classes=["suggested-action"], halign=Gtk.Align.START, sensitive=False)
         self.x_btn.connect("clicked", lambda *_: self.run_extract())
         box.append(self.x_btn)
+        return box
 
     def _x_file(self, p: Path):
         self.x_file = p
@@ -322,6 +323,7 @@ class Win(Gtk.ApplicationWindow):
 
         self.ls_status = self._status()
         box.append(self.ls_status)
+        return box
 
     def _ls_file(self, p: Path):
         self.ls_file = p
