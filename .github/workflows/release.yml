@@ -37,7 +37,8 @@ jobs:
 
       - name: Build zfile-gui.exe
         run: |
-          python -m PyInstaller --noconfirm --clean --name zfile-gui run_gui.py
+          python -m PyInstaller --noconfirm --clean --name zfile-gui \
+            --runtime-hook scripts/pyi_rth_gi_typelibs.py run_gui.py
           APP=dist/zfile-gui/_internal
 
           # copy the GTK4 runtime (DLLs + resources) that the exe needs;
@@ -48,6 +49,9 @@ jobs:
           cp -r /mingw64/share/glib-2.0 "$APP/share/"
           cp -r /mingw64/lib/girepository-1.0 "$APP/lib/"
           cp -r /mingw64/lib/gdk-pixbuf-2.0 "$APP/lib/"
+          # gi_typelibs/ is where the runtime hook above points GI_TYPELIB_PATH
+          mkdir -p "$APP/gi_typelibs"
+          cp /mingw64/lib/girepository-1.0/*.typelib "$APP/gi_typelibs/"
           cp /mingw64/bin/*.dll "$APP/"
           cp /mingw64/bin/gdbus.exe /mingw64/bin/gspawn-win64-helper.exe /mingw64/bin/gspawn-win64-helper-console.exe "$APP/" || true
 
@@ -79,7 +83,8 @@ jobs:
       - name: Install GTK4 + build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-1 gir1.2-gtk-4.0 libgirepository1.0-dev libcairo2-dev pkg-config xvfb
+          sudo apt-get install -y libgtk-4-1 gir1.2-gtk-4.0 gobject-introspection \
+            libgirepository-2.0-dev gir1.2-girepository-3.0 libcairo2-dev pkg-config xvfb
 
       - name: Install package + PyInstaller
         run: |
@@ -134,12 +139,18 @@ jobs:
         run: |
           cat > dist/zfile-gui/zfile-gui.sh <<'EOF'
           #!/bin/sh
-          # Needs GTK4 from Homebrew: brew install gtk4
+          # Needs GTK4 from Homebrew: brew install gtk4 gobject-introspection
           HERE=$(cd "$(dirname "$0")" && pwd)
-          GTK=$(brew --prefix gtk4 2>/dev/null) || { echo "zfile-gui: brew install gtk4" >&2; exit 1; }
-          GLIB=$(brew --prefix glib)
-          export DYLD_FALLBACK_LIBRARY_PATH="$GTK/lib:$GLIB/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
-          export GI_TYPELIB_PATH="$GTK/lib/girepository-1.0:$GLIB/lib/girepository-1.0"
+          GTK=$(brew --prefix gtk4 2>/dev/null) || { echo "zfile-gui: brew install gtk4 gobject-introspection" >&2; exit 1; }
+          # Gtk-4.0.typelib pulls in Pango/HarfBuzz/Graphene/GdkPixbuf/Cairo and
+          # GIRepository-3.0 comes from glib, each in its own Homebrew prefix
+          for pkg in gtk4 glib gobject-introspection pango harfbuzz graphene gdk-pixbuf cairo; do
+            p=$(brew --prefix "$pkg" 2>/dev/null) || continue
+            GI_TYPELIB_PATH="$GI_TYPELIB_PATH:$p/lib/girepository-1.0"
+            DYLD_FALLBACK_LIBRARY_PATH="$DYLD_FALLBACK_LIBRARY_PATH:$p/lib"
+          done
+          export GI_TYPELIB_PATH="${GI_TYPELIB_PATH#:}"
+          export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH#:}"
           exec "$HERE/zfile-gui" "$@"
           EOF
           chmod +x dist/zfile-gui/zfile-gui.sh
