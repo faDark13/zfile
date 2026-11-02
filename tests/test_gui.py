@@ -23,6 +23,6 @@ def test_every_gui_page_returns_its_box():
 
 
 def test_page_names_used_in_add_titled_exist():
-    text = GUI.read_text()
+    text = GUI.read_text(encoding="utf-8")
     for page in re.findall(r"add_titled\(self\.(_\w+_page)\(\)", text):
         assert f"def {page}(" in text, f"add_titled references missing {page}"
