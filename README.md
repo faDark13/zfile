@@ -41,7 +41,8 @@ zfile l src.7z                        # list contents
 | `zfile l` | `-p/--password` (7z) |
 
 Rules: brotli holds exactly one file; `zipfile` cannot encrypt zips, so passwords are 7z-only;
-`-o`'s suffix wins over `-f`; existing archives/files are not overwritten without `-y`.
+an explicit `-f` beats the suffix of `-o`; existing archives/files are not overwritten without `-y`;
+extraction refuses path-traversal entries (`../…`) in untrusted archives.
 Corrupt input exits with code 2 and a one-line message, never a traceback.
 
 ## GUI

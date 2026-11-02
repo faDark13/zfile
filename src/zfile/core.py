@@ -152,17 +152,28 @@ def extract(
     dest = Path(output) if output is not None else Path(".")
     if fmt == "zip":
         with zipfile.ZipFile(archive) as zf:
-            _check_collisions([n for n in zf.namelist() if not n.endswith("/")], dest, overwrite)
+            names = [n for n in zf.namelist() if not n.endswith("/")]
+            _check_slip(names, dest)
+            _check_collisions(names, dest, overwrite)
             zf.extractall(dest)
     else:
         with py7zr.SevenZipFile(archive, password=password or None) as zf:
             if zf.needs_password() and not password:
                 raise ZfileError("this archive needs a 7z password — try -p")
-            _check_collisions(
-                [i.filename for i in zf.list() if not i.is_directory], dest, overwrite
-            )
+            names = [i.filename for i in zf.list() if not i.is_directory]
+            _check_slip(names, dest)
+            _check_collisions(names, dest, overwrite)
             zf.extractall(dest)
     return dest
+
+
+def _check_slip(names: list[str], dest: Path) -> None:
+    """Refuse path traversal: a hostile archive must not write outside dest."""
+    root = dest.resolve()
+    for name in names:
+        target = (dest / name).resolve()
+        if target != root and root not in target.parents:
+            raise ZfileError(f"unsafe path in archive: {name}")
 
 
 def _check_collisions(names: list[str], dest: Path, overwrite: bool) -> None:

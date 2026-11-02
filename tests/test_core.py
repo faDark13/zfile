@@ -36,3 +36,16 @@ def test_user_errors_are_explicit(tmp_path):
         core.extract(locked, tmp_path / "out")
     core.extract(locked, tmp_path / "out", password="pw123")
     assert (tmp_path / "out/d/s.txt").read_bytes() == b"secret"
+
+
+def test_zip_slip_entry_is_blocked(tmp_path):
+    import zipfile
+
+    hostile = tmp_path / "hostile.zip"
+    with zipfile.ZipFile(hostile, "w") as zf:
+        zf.writestr("../outside.txt", b"evil")  # escapes dest when extracted
+        zf.writestr("normal.txt", b"ok")
+    dest = tmp_path / "dest"
+    with pytest.raises(ZfileError, match="unsafe path"):
+        core.extract(hostile, dest)
+    assert not (tmp_path / "outside.txt").exists()

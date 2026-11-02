@@ -120,7 +120,14 @@ class Win(Gtk.ApplicationWindow):
                 result = fn()
             except BaseException as exc:
                 err = exc
-            GLib.idle_add(lambda: (done(result, err), GLib.SOURCE_REMOVE))
+
+            def deliver():
+                # drop busy before done() so the pulse loop stops as the job ends
+                self.busy = max(0, self.busy - 1)
+                done(result, err)
+                return GLib.SOURCE_REMOVE
+
+            GLib.idle_add(deliver)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -172,7 +179,6 @@ class Win(Gtk.ApplicationWindow):
     def _compress_page(self):
         box = self._page()
         self.c_paths: list[Path] = []
-        self.c_btn.set_sensitive(False) if hasattr(self, "c_btn") else None  # set again below
 
         files_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         files_row.append(self._chooser("Thêm file…", _Pick(multiple=True), self._c_add))
