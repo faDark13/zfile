@@ -6,11 +6,14 @@ GTK4 desktop window for the same three actions (compress / extract / list).
 ## Install
 
 ```bash
-uv tool install .      # or: pipx install .
+uv tool install .                     # CLI — Python ≥ 3.12 is all it needs
+uv tool install . --with PyGObject    # CLI + GUI (see GTK4 table below)
 zfile --help
 ```
 
-The CLI needs only Python ≥ 3.12. The GUI needs GTK4 and PyGObject as system packages:
+Compiling `PyGObject` in that tool environment additionally needs (Ubuntu:
+`libgirepository-2.0-dev libcairo2-dev`; macOS/Homebrew: `brew install
+gobject-introspection cairo`). The GUI needs GTK4 from the system:
 
 | Platform | Command |
 |----------|---------|
@@ -18,6 +21,8 @@ The CLI needs only Python ≥ 3.12. The GUI needs GTK4 and PyGObject as system p
 | Fedora | `sudo dnf install gtk4 python3-gobject` |
 | macOS (Homebrew) | `brew install gtk4 gobject-introspection` |
 | Arch | `sudo pacman -S gtk4 python-gobject` |
+
+The easiest way to get the GUI is a release bundle instead (see Downloads).
 
 ## CLI
 
