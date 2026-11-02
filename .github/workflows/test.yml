@@ -24,4 +24,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install . pytest
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q --tb=short 2>&1 | tee pytest.txt
+      # show the failing lines as ::error logs → GitHub converts them into
+      # check-run annotations (the only failure detail readable anonymously)
+      - name: Surface failures as annotations
+        if: failure()
+        shell: sh
+        run: |
+          tail -n 60 pytest.txt | while IFS= read -r line; do
+            echo "::error::$line"
+          done
