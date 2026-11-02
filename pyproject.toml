@@ -1,0 +1,34 @@
+[project]
+name = "zfile"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "faDark13", email = "dark1234tan@gmail.com" }
+]
+# 3.14 → 3.12: the Windows release build runs on MSYS2's Python (>=3.12)
+requires-python = ">=3.12"
+dependencies = [
+    "brotli>=1.2.1",
+    "py7zr>=1.1.4",
+    "typer>=0.27.3",
+]
+
+[project.scripts]
+zfile = "zfile.cli:main"
+
+# GUI script; on Windows this is packaged by the PyInstaller workflow into zfile-gui.exe
+[project.gui-scripts]
+zfile-gui = "zfile.gui:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
