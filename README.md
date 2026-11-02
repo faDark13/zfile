@@ -74,6 +74,10 @@ uv run zfile-gui
 uv run pytest
 ```
 
+CI: `.github/workflows/test.yml` runs the suite on every branch push and PR on
+Windows, Linux and macOS; a `v*` tag skips it and goes straight to the release
+build (`.github/workflows/release.yml`).
+
 Archive logic lives in `src/zfile/core.py` (UI-free); `cli.py` and `gui.py` are thin front-ends.
 Builds: `.github/workflows/release.yml` (PyInstaller on Windows, Linux and macOS), entry script
 `run_gui.py`.
