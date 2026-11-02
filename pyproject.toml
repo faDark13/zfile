@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "faDark13", email = "dark1234tan@gmail.com" }
 ]
-# 3.14 → 3.12: the Windows release build runs on MSYS2's Python (>=3.12)
+# MSYS2's mingw Python is 3.14 — anything >= 3.12 is fine
 requires-python = ">=3.12"
 dependencies = [
     "brotli>=1.2.1",
@@ -25,8 +25,13 @@ zfile-gui = "zfile.gui:main"
 testpaths = ["tests"]
 
 [build-system]
-requires = ["uv_build>=0.13.5,<0.14.0"]
-build-backend = "uv_build"
+# setuptools, not uv_build: MSYS2's mingw Python (cp314-...-gnu ABI) has no
+# uv_build wheel, and building its Rust sdist needs a Rust toolchain.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [dependency-groups]
 dev = [
