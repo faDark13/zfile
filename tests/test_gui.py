@@ -8,7 +8,7 @@ GUI = Path(__file__).resolve().parents[1] / "src" / "zfile" / "gui.py"
 
 def method_block(name: str) -> str:
     """Source of one Win method, up to the next same-indent def."""
-    text = GUI.read_text()
+    text = GUI.read_text(encoding="utf-8")  # gui.py holds Vietnamese strings
     match = re.search(rf"\n    def {re.escape(name)}\(", text)
     assert match, f"{name} not found in gui.py"
     tail = text[match.start():]
