@@ -63,7 +63,7 @@ jobs:
       - name: Zip
         run: |
           cd dist
-          7z a zfile-gui-windows-x64.zip zfile-gui
+          python -m zipfile -c zfile-gui-windows-x64.zip zfile-gui
 
       - uses: actions/upload-artifact@v4
         with:
