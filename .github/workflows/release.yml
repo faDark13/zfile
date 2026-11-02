@@ -1,0 +1,167 @@
+name: release
+
+# Builds the GUI for Windows, Linux and macOS on a v* tag and attaches every
+# archive to that GitHub Release. workflow_dispatch builds artifacts only.
+# GTK4 is a system dependency: bundled on Windows, installed by the user on
+# Linux/macOS (see the launchers below).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-gobject
+            mingw-w64-x86_64-python-pip
+            mingw-w64-x86_64-gcc
+
+      # pip builds the C deps (brotli, pycryptodomex) with the mingw gcc above
+      - name: Install package + PyInstaller
+        run: |
+          python -m pip install .
+          python -m pip install pyinstaller
+
+      - name: Build zfile-gui.exe
+        run: |
+          python -m PyInstaller --noconfirm --clean --name zfile-gui run_gui.py
+          APP=dist/zfile-gui/_internal
+
+          # copy the GTK4 runtime (DLLs + resources) that the exe needs;
+          # dlls go next to the exe's bundled files, resource data keeps the
+          # same share/ and lib/ layout as the MSYS2 prefix
+          mkdir -p "$APP/share" "$APP/lib"
+          cp -r /mingw64/share/gtk-4.0 "$APP/share/"
+          cp -r /mingw64/share/glib-2.0 "$APP/share/"
+          cp -r /mingw64/lib/girepository-1.0 "$APP/lib/"
+          cp -r /mingw64/lib/gdk-pixbuf-2.0 "$APP/lib/"
+          cp /mingw64/bin/*.dll "$APP/"
+          cp /mingw64/bin/gdbus.exe /mingw64/bin/gspawn-win64-helper.exe /mingw64/bin/gspawn-win64-helper-console.exe "$APP/" || true
+
+      - name: Zip
+        run: |
+          cd dist
+          7z a zfile-gui-windows-x64.zip zfile-gui
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zfile-gui-windows-x64
+          path: dist/zfile-gui-windows-x64.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/zfile-gui-windows-x64.zip
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install GTK4 + build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-1 gir1.2-gtk-4.0 libgirepository1.0-dev libcairo2-dev pkg-config xvfb
+
+      - name: Install package + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . PyGObject pyinstaller
+
+      - name: Build zfile-gui
+        run: python -m PyInstaller --noconfirm --clean --name zfile-gui run_gui.py
+
+      # the bundle needs GTK4 from the distro, so a real launch under Xvfb is
+      # the only smoke test that proves it works; timeout 124 = still running
+      - name: Smoke-run under Xvfb
+        run: timeout 10 xvfb-run -a ./dist/zfile-gui/zfile-gui || test $? -eq 124
+
+      - name: Package
+        run: |
+          tar -czf zfile-gui-linux-x64.tar.gz -C dist zfile-gui
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zfile-gui-linux-x64
+          path: zfile-gui-linux-x64.tar.gz
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: zfile-gui-linux-x64.tar.gz
+
+  macos:
+    runs-on: macos-14 # arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install GTK4 + build deps
+        run: brew install gtk4 gobject-introspection cairo pkgconf coreutils
+
+      - name: Install package + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . PyGObject pyinstaller
+
+      - name: Build zfile-gui
+        run: python -m PyInstaller --noconfirm --clean --name zfile-gui run_gui.py
+
+      # GTK4 is not vendored on macOS: the launcher points GI/DYLD at Homebrew
+      - name: Add launcher
+        run: |
+          cat > dist/zfile-gui/zfile-gui.sh <<'EOF'
+          #!/bin/sh
+          # Needs GTK4 from Homebrew: brew install gtk4
+          HERE=$(cd "$(dirname "$0")" && pwd)
+          GTK=$(brew --prefix gtk4 2>/dev/null) || { echo "zfile-gui: brew install gtk4" >&2; exit 1; }
+          GLIB=$(brew --prefix glib)
+          export DYLD_FALLBACK_LIBRARY_PATH="$GTK/lib:$GLIB/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
+          export GI_TYPELIB_PATH="$GTK/lib/girepository-1.0:$GLIB/lib/girepository-1.0"
+          exec "$HERE/zfile-gui" "$@"
+          EOF
+          chmod +x dist/zfile-gui/zfile-gui.sh
+
+      # no display on the runner: only fail on a real traceback (import/dylib errors)
+      - name: Smoke-run
+        run: |
+          out=$(gtimeout 10 ./dist/zfile-gui/zfile-gui.sh 2>&1 || true)
+          echo "$out"
+          ! echo "$out" | grep -q Traceback
+
+      - name: Package
+        run: |
+          tar -czf zfile-gui-macos-arm64.tar.gz -C dist zfile-gui
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zfile-gui-macos-arm64
+          path: zfile-gui-macos-arm64.tar.gz
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: zfile-gui-macos-arm64.tar.gz
