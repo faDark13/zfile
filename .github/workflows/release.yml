@@ -1,7 +1,8 @@
 name: release
 
-# Builds the GUI for Windows, Linux and macOS on a v* tag and attaches every
-# archive to that GitHub Release. workflow_dispatch builds artifacts only.
+# Builds the GUI for Windows, Linux and macOS on a v* tag; the final `release`
+# job publishes one GitHub Release holding all three archives. workflow_dispatch
+# builds the artifacts only (no release).
 # GTK4 is a system dependency: bundled on Windows, installed by the user on
 # Linux/macOS (see the launchers below).
 on:
@@ -70,12 +71,6 @@ jobs:
           name: zfile-gui-windows-x64
           path: dist/zfile-gui-windows-x64.zip
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/zfile-gui-windows-x64.zip
-
   linux:
     runs-on: ubuntu-24.04
     steps:
@@ -112,12 +107,6 @@ jobs:
         with:
           name: zfile-gui-linux-x64
           path: zfile-gui-linux-x64.tar.gz
-
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: zfile-gui-linux-x64.tar.gz
 
   macos:
     runs-on: macos-14 # arm64
@@ -176,8 +165,22 @@ jobs:
           name: zfile-gui-macos-arm64
           path: zfile-gui-macos-arm64.tar.gz
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+  # one release, published once all three builds finished: a per-job attach
+  # races the same tag from three runners (409 on create loses the file)
+  release:
+    needs: [windows, linux, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: zfile-gui-macos-arm64.tar.gz
+          files: dist/*
+
