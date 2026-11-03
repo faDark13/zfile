@@ -52,9 +52,9 @@ class Win(Gtk.ApplicationWindow):
         header = Gtk.HeaderBar()
         header.set_title_widget(Gtk.StackSwitcher(stack=stack))
         self.set_titlebar(header)
-        stack.add_titled(self._compress_page(), "c", "Nén")
-        stack.add_titled(self._extract_page(), "x", "Giải nén")
-        stack.add_titled(self._list_page(), "l", "Xem nội dung")
+        stack.add_titled(self._compress_page(), "c", "Compress")
+        stack.add_titled(self._extract_page(), "x", "Extract")
+        stack.add_titled(self._list_page(), "l", "List contents")
         self.set_child(stack)
 
         # one pulse loop: bars pulse while a background job has no fraction
@@ -139,13 +139,13 @@ class Win(Gtk.ApplicationWindow):
 
     def _archive_filter(self) -> Gtk.FileFilter:
         f = Gtk.FileFilter()
-        f.set_name("Kho lưu (.br/.zip/.7z)")
+        f.set_name("Archives (.br/.zip/.7z)")
         for pattern in ("*.br", "*.zip", "*.7z"):
             f.add_pattern(pattern)
         return f
 
     def _ask_password(self, msg: str, cb) -> None:
-        dlg = Gtk.Window(transient_for=self, modal=True, title="Mật khẩu 7z", default_width=420)
+        dlg = Gtk.Window(transient_for=self, modal=True, title="7z password", default_width=420)
         box = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL, spacing=12,
             margin_top=18, margin_bottom=18, margin_start=18, margin_end=18,
@@ -154,9 +154,9 @@ class Win(Gtk.ApplicationWindow):
         entry = Gtk.PasswordEntry(show_peek_icon=True, activates_default=True)
         box.append(entry)
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, halign=Gtk.Align.END)
-        cancel = Gtk.Button(label="Hủy")
+        cancel = Gtk.Button(label="Cancel")
         cancel.connect("clicked", lambda *_: dlg.destroy())
-        ok = Gtk.Button(label="Tiếp tục", css_classes=["suggested-action"])
+        ok = Gtk.Button(label="Continue", css_classes=["suggested-action"])
         ok.connect("clicked", lambda *_: (dlg.destroy(), cb(entry.get_text())))
         buttons.append(cancel)
         buttons.append(ok)
@@ -170,8 +170,8 @@ class Win(Gtk.ApplicationWindow):
         if isinstance(err, ZfileError):
             status.set_text(f"⚠ {err}")
         else:  # library crash — explain through a dialog too
-            status.set_text(f"⚠ Lỗi hệ thống: {err}")
-            dlg = Gtk.AlertDialog(message="Có gì đó hỏng rồi", detail=str(err))
+            status.set_text(f"⚠ System error: {err}")
+            dlg = Gtk.AlertDialog(message="Something broke", detail=str(err))
             dlg.show(self)
 
     # ---------- page: compress (CLI `c`) ----------
@@ -181,19 +181,19 @@ class Win(Gtk.ApplicationWindow):
         self.c_paths: list[Path] = []
 
         files_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        files_row.append(self._chooser("Thêm file…", _Pick(multiple=True), self._c_add))
-        files_row.append(self._chooser("Thêm thư mục…", _Pick(folder=True), self._c_add))
+        files_row.append(self._chooser("Add file…", _Pick(multiple=True), self._c_add))
+        files_row.append(self._chooser("Add folder…", _Pick(folder=True), self._c_add))
         box.append(files_row)
-        self.c_files_label = Gtk.Label(xalign=0, wrap=True, max_width_chars=60, label="Chưa chọn gì")
+        self.c_files_label = Gtk.Label(xalign=0, wrap=True, max_width_chars=60, label="Nothing selected yet")
         box.append(self.c_files_label)
 
-        self.c_fmt = Gtk.DropDown.new_from_strings(["Tự động", "br", "zip", "7z"])
-        box.append(self._row("Định dạng:", self.c_fmt))
+        self.c_fmt = Gtk.DropDown.new_from_strings(["Auto", "br", "zip", "7z"])
+        box.append(self._row("Format:", self.c_fmt))
         self.c_pass = Gtk.PasswordEntry(show_peek_icon=True)
-        box.append(self._row("Mật khẩu:", self.c_pass, hint="chỉ 7z"))
-        self.c_out = Gtk.Entry(placeholder_text="vd: out.7z — để trống là tự đặt tên")
-        box.append(self._row("Lưu vào:", self.c_out))
-        self.c_over = Gtk.CheckButton(label="Cho phép đè file đã có")
+        box.append(self._row("Password:", self.c_pass, hint="7z only"))
+        self.c_out = Gtk.Entry(placeholder_text="e.g. out.7z — leave empty to pick a name")
+        box.append(self._row("Save as:", self.c_out))
+        self.c_over = Gtk.CheckButton(label="Allow overwriting existing files")
         box.append(self.c_over)
 
         self.c_bar = Gtk.ProgressBar()
@@ -203,13 +203,14 @@ class Win(Gtk.ApplicationWindow):
         self.c_status = self._status()
         box.append(self.c_status)
 
-        self.c_btn = Gtk.Button(label="Nén", css_classes=["suggested-action"], halign=Gtk.Align.START, sensitive=False)
+        self.c_btn = Gtk.Button(label="Compress", css_classes=["suggested-action"], halign=Gtk.Align.START, sensitive=False)
         self.c_btn.connect("clicked", self.run_compress)
         box.append(self.c_btn)
         return box
 
-    def _c_add(self, paths: list[Path]):
-        self.c_paths += list(paths)
+    def _c_add(self, paths: list[Path] | Path):
+        # the folder chooser hands over a single Path, the multiple-file chooser a list
+        self.c_paths += [paths] if isinstance(paths, Path) else list(paths)
         self.c_files_label.set_text(", ".join(str(p) for p in self.c_paths))
         self.c_btn.set_sensitive(True)
 
@@ -219,7 +220,7 @@ class Win(Gtk.ApplicationWindow):
         out = Path(out_text) if out_text else None
         paths = list(self.c_paths)
         self.c_btn.set_sensitive(False)
-        self.c_status.set_text("Đang nén…")
+        self.c_status.set_text("Compressing…")
         self._spawn(
             lambda: core.compress(
                 paths, fmt, self.c_pass.get_text() or None, out, self.c_over.get_active(),
@@ -232,7 +233,7 @@ class Win(Gtk.ApplicationWindow):
         if err is not None:
             self._flag(self.c_status, err)
         else:
-            self.c_status.set_text(f"✔ Đã nén → {result}")
+            self.c_status.set_text(f"✔ Compressed → {result}")
         self.c_btn.set_sensitive(True)
 
     # ---------- page: extract (CLI `x`) ----------
@@ -243,17 +244,17 @@ class Win(Gtk.ApplicationWindow):
         self.x_file: Path | None = None
         self.x_dir: Path | None = None
 
-        box.append(self._chooser("Chọn kho lưu…", _Pick(), self._x_file))
+        box.append(self._chooser("Choose archive…", _Pick(), self._x_file))
         self.x_label = Gtk.Label(xalign=0, wrap=True, max_width_chars=60, label="")
         box.append(self.x_label)
         self.x_dest_btn = self._chooser(
-            "Thư mục đích: (mặc định · thư mục hiện tại)", _Pick(folder=True), self._x_dest
+            "Destination: (default · current folder)", _Pick(folder=True), self._x_dest
         )
         box.append(self.x_dest_btn)
 
         self.x_pass = Gtk.PasswordEntry(show_peek_icon=True)
-        box.append(self._row("Mật khẩu:", self.x_pass, hint="chỉ 7z"))
-        self.x_over = Gtk.CheckButton(label="Cho phép đè file trùng tên ở đích")
+        box.append(self._row("Password:", self.x_pass, hint="7z only"))
+        self.x_over = Gtk.CheckButton(label="Allow overwriting files with the same name")
         box.append(self.x_over)
 
         self.x_bar = Gtk.ProgressBar()
@@ -263,7 +264,7 @@ class Win(Gtk.ApplicationWindow):
         self.x_status = self._status()
         box.append(self.x_status)
 
-        self.x_btn = Gtk.Button(label="Giải nén", css_classes=["suggested-action"], halign=Gtk.Align.START, sensitive=False)
+        self.x_btn = Gtk.Button(label="Extract", css_classes=["suggested-action"], halign=Gtk.Align.START, sensitive=False)
         self.x_btn.connect("clicked", lambda *_: self.run_extract())
         box.append(self.x_btn)
         return box
@@ -275,13 +276,13 @@ class Win(Gtk.ApplicationWindow):
 
     def _x_dest(self, p: Path):
         self.x_dir = p
-        self.x_dest_btn.set_label(f"Thư mục đích: {p}")
+        self.x_dest_btn.set_label(f"Destination: {p}")
 
     def run_extract(self, password: str | None = None):
         if self.x_file is None:
             return
         self.x_btn.set_sensitive(False)
-        self.x_status.set_text("Đang giải nén…")
+        self.x_status.set_text("Extracting…")
         pw = password if password is not None else (self.x_pass.get_text() or None)
         self._spawn(
             lambda: core.extract(
@@ -302,7 +303,7 @@ class Win(Gtk.ApplicationWindow):
                 return
             self._flag(self.x_status, err)
         else:
-            self.x_status.set_text(f"✔ Đã giải nén → {result}")
+            self.x_status.set_text(f"✔ Extracted → {result}")
         self.x_btn.set_sensitive(True)
 
     # ---------- page: list contents (CLI `l`) ----------
@@ -310,8 +311,8 @@ class Win(Gtk.ApplicationWindow):
     def _list_page(self):
         box = self._page()
         self.ls_file: Path | None = None
-        box.append(self._chooser("Chọn kho lưu…", _Pick(), self._ls_file))
-        self.ls_btn = Gtk.Button(label="Xem nội dung", halign=Gtk.Align.START, sensitive=False)
+        box.append(self._chooser("Choose archive…", _Pick(), self._ls_file))
+        self.ls_btn = Gtk.Button(label="List contents", halign=Gtk.Align.START, sensitive=False)
         self.ls_btn.connect("clicked", lambda *_: self.run_list())
         box.append(self.ls_btn)
 
@@ -346,7 +347,7 @@ class Win(Gtk.ApplicationWindow):
         self.ls_status.set_text("")
         lines = "\n".join(
             f"{name}  ({fmt_size(size)})" if size else name for name, size in result
-        ) or "(kho trống)"
+        ) or "(archive is empty)"
         self.ls_view.get_buffer().set_text(lines)
 
 
